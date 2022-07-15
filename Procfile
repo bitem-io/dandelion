@@ -1,0 +1,1 @@
+web: java $JVM_OPTS -cp target/dandelion-standalone.jar clojure.main -m dandelion.web
