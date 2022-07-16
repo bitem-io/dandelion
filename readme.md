@@ -28,6 +28,6 @@ shadow.user> (shadow/repl :app)
 ## Deployment
 Netlify.
 - Connect the git repository in Netlify.
-- Build command: `npx shadow-cljs release app`
+- Build command: `yarn release`
 - Publish director: `resources/public/`
 - Reference: https://www.emcken.dk/programming/2022/02/20/shadow-cljs-and-netlify/

@@ -10,6 +10,7 @@
         "shadow-cljs": "^2.16.12"
     },
     "scripts": {
-        "start": "npx shadow-cljs watch app"
+        "start": "npx shadow-cljs watch app",
+        "release": "npx shadow-cljs release app"
     }
 }
