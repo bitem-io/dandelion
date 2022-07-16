@@ -27,58 +27,36 @@
    :float 'float?
    :any 'any?
    :number 'number?
-   :pos-int 'pos-int?
-   :neg-int 'neg-int?
-   :nat-int 'nat-int?
-   :pos 'pos?
-   :neg 'neg?
+   :positive-number 'pos?
+   :negative-number 'neg?
+   :positive-integer 'pos-int?
+   :negative-integer 'neg-int?
+   :non-negative-integer 'nat-int?
    :double 'double?
    :boolean 'boolean?
-   :ident 'ident?
-   :simple-ident 'simple-ident?
-   :qualified-ident 'qualified-ident?
-   :keyword 'keyword?
-   :simple-keyword 'simple-keyword?
-   :qualified-keyword 'qualified-keyword?
-   :symbol 'symbol?
-   :simple-symbol 'simple-symbol?
-   :qualified-symbol 'qualified-symbol?
    :uuid 'uuid?
    :uri 'uri?
-   :decimal 'decimal?
-   :inst 'inst?
-   :seqable 'seqable?
-   :indexed 'indexed?
-   :map 'map?
-   :vector 'vector?
-   :list 'list?
-   :seq 'seq?
+   :datetime 'inst?
+   :any-array 'seqable?
+   :any-object 'map?
    :char 'char?
    :set 'set?
-   :nil 'nil?
+   :null 'nil?
    :false 'false?
    :true 'true?
-   :zero 'zero?
-   :rational 'rational?
-   :coll 'coll?
-   :empty 'empty?
-   :associative 'associative?
-   :sequential 'sequential?
-   :ratio 'ratio?
-   :bytes 'bytes?
-   :ifn 'ifn?
-   :fn 'fn?})
+   :zero 'zero?})
 
 (defn extract-fields [entry]
   [(keyword (:name entry))
    (keyword->predicate (:type entry))])
-
+#_
 (= [:age 'int?]
    (extract-fields {:name "age" :type :int}))
 
 (defn schema-user->malli [entries]
   (apply conj [:map] (map extract-fields (vals entries))))
 
+#_
 (= [:map [:nickname 'string?] [:age 'int?]]
    (schema-user->malli {1 {:name "nickname" :type :string}
                         2 {:name "age" :type :int}}))
@@ -86,11 +64,21 @@
 (defn output-size-input []
   [:div
    [:label "output sample size: "]
-   [:input {:class "input"
-           :type "text"
-           :placeholder @output-size
-           :on-change #(let [v (-> % .-target .-value)]
-                         (reset! output-size v))}]])
+   [:input {:class "input is-rounded"
+            :type "text"
+            :placeholder @output-size
+            :on-change #(let [v (-> % .-target .-value)]
+                          (reset! output-size v))}]])
+
+(def generation-ready?
+  (rc/atom false))
+
+(defn check-schema-ready []
+  (let [check-item (fn [item]
+                     (and (-> item val :name nil? not)
+                          (-> item val :type nil? not)))
+        p (every? true? (map check-item @user-schema))]
+    (reset! generation-ready? p)))
 
 (defn type-selection [id]
   (let [dropped? (rc/atom false)
@@ -98,6 +86,7 @@
         selected (rc/atom nil)
         action (fn [t]
                  (fn []
+                   (check-schema-ready)
                    (reset! selected t)
                    (swap! dropped? not)
                    (reset! showing (name t))
@@ -114,14 +103,18 @@
               :role "menu"}
         (conj [:div {:class "dropdown-content"}]
               (for [k (keys keyword->predicate)]
-                [:a {:class "dropdown-item" :on-click (action k)} (name k)]))]])))
+                [:a {:class "dropdown-item"
+                     :key k
+                     :on-click (action k)} (name k)]))]])))
 
 (defn field-name-input [id]
   [:input {:class "input"
            :type "text"
            :placeholder "Input"
+           :key id
            :on-change #(let [v (-> % .-target .-value)]
-                         (swap! user-schema (fn [us] (assoc-in us [id :name] v))))}])
+                         (swap! user-schema (fn [us] (assoc-in us [id :name] v)))
+                         (check-schema-ready))}])
 
 (defn schema-table []
   [:table {:class "table"}
@@ -133,31 +126,33 @@
    [:tbody
     (for [item @user-schema]
       [:tr
-       [:th (key item)]
-       [:td [field-name-input (key item)]]
-       [:td [type-selection (key item)]]])]])
+       [:td {:key (str "action-" item)} (key item)]
+       [:td {:key (str "name-" item)} [field-name-input (key item)]]
+       [:td {:key (str "type-" item)} [type-selection (key item)]]])]])
 
 (defn add-field-button []
   [:button
-   {:on-click #(swap! user-schema assoc (inc (count @user-schema)) {})}
+   {:class "button"
+    :on-click #(swap! user-schema assoc (inc (count @user-schema)) {})}
    "Add field!"])
 
 (defn generate-button []
   [:button
-   {:on-click #(do
+   {:class (if generation-ready?
+             "button is-primary"
+             "button is-static")
+    :on-click #(do
                  (reset! malli-schema nil)
                  (reset! malli-schema
                          (mg/sample (schema-user->malli @user-schema)
-                                    {:seed 129, :size (js/parseInt @output-size)})))}
+                                    {:seed 42
+                                     :size (js/parseInt @output-size)})))}
    "Generate!"])
 
 (defn field-input []
   [:div
    [:div {:class "field"}
-    [:div {:class "control"}
-     [:input {:class "input"
-              :type "text"
-              :placeholder "Text input"}]]
+    [:div {:class "control"}]
     [schema-table]
     [add-field-button]
     [output-size-input]
@@ -167,6 +162,17 @@
   [:textarea {:class "textarea"
               :placeholder "e.g. Hello world"}])
 
+(defn result-window []
+  [:div {:class "column"}
+   [:h1 "Result"]
+   [:textarea {:class "textarea"
+               :rows 25
+               :read-only true
+               :value (str               
+                       (-> (into [] @malli-schema)
+                           (clj->js)
+                           (js/JSON.stringify nil 4)))}]])
+
 (defn app-page []
   [:div {:class "section"}
    [:div {:class "container"}
@@ -175,55 +181,25 @@
       (case @input-mode
         :field [field-input]
         :json [json-input])]
-     [:div {:class "column"}
-      [:textarea {:class "textarea"
-                  :placeholder "e.g. Hello world"
-                  :value (str
-                          "\n"
-                          @user-schema
-                          "\n"
-                          (schema-user->malli @user-schema)
-                          "\n"
-                         
-                          (with-out-str
-                            (cljs.pprint/pprint
-                             (.stringify js/JSON (clj->js @malli-schema))
-                                         ))
-
-                          )}]]]]])
-
-
-
-
-
-(-> {:a 1}
-    (clj->js)
-    key
-    (js/JSON.stringify)
-    #_(clojure.string/replace  "{" "")
-    #_(clojure.string/replace  "}" "")
-    #_(clojure.string/replace  "" "")
-    )
+     [result-window]]]])
 
 (defn about-page []
   [:div
-   [:h2 "About frontend"]
-   [:ul
-    [:li [:a {:href "http://google.com"} "external link"]]
-    [:li [:a {:href (rfe/href ::foobar)} "Missing route"]]]
-   [:div
-    {:content-editable true
-     :suppressContentEditableWarning true}
-    [:p "Link inside contentEditable element is ignored."]
-    [:a {:href (rfe/href ::app)} "Link"]]])
+   [:p "Object generator."]])
 
 (defonce match (rc/atom nil))
 
+(defn navbar []
+  [:nav.navbar
+   {:aria-label "main navigation", :role "navigation"}
+   [:div#navbarBasicExample.navbar-menu
+    [:div.navbar-start
+     [:a.navbar-item {:href (rfe/href ::app)} "App"]
+     [:a.navbar-item {:href (rfe/href ::about)} "About"]]]])
+
 (defn current-page []
   [:div
-   [:ul
-    [:li [:a {:href (rfe/href ::app)} "App"]]
-    [:li [:a {:href (rfe/href ::about)} "About"]]]
+   [navbar]
    (when @match
      (let [view (:view (:data @match))]
        [view @match]))])
