@@ -1,5 +1,6 @@
 (ns dandelion.core
   (:require
+   [clojure.string :as str]
    [reagent.core :as rc]
    [reagent.dom :as rd]
    [reitit.frontend :as rf]
@@ -46,29 +47,18 @@
    :true 'true?
    :zero 'zero?})
 
+(defn ->s [& ks]
+  (let [names (map name ks)]
+    (str/join " " names)))
+
 (defn extract-fields [entry]
   [(keyword (:name entry))
    (keyword->predicate (:type entry))])
-#_
-(= [:age 'int?]
-   (extract-fields {:name "age" :type :int}))
 
 (defn schema-user->malli [entries]
-  (apply conj [:map] (map extract-fields (vals entries))))
-
-#_
-(= [:map [:nickname 'string?] [:age 'int?]]
-   (schema-user->malli {1 {:name "nickname" :type :string}
-                        2 {:name "age" :type :int}}))
-
-(defn output-size-input []
-  [:div
-   [:label "output sample size: "]
-   [:input {:class "input is-rounded"
-            :type "text"
-            :placeholder @output-size
-            :on-change #(let [v (-> % .-target .-value)]
-                          (reset! output-size v))}]])
+  (apply conj [:map]
+         (map extract-fields
+              (vals entries))))
 
 (def generation-ready?
   (rc/atom false))
@@ -116,31 +106,39 @@
                          (swap! user-schema (fn [us] (assoc-in us [id :name] v)))
                          (check-schema-ready))}])
 
-(defn schema-table []
-  [:table {:class "table"}
-   [:thead
-    [:tr
-     [:th "Action"]
-     [:th "Name"]
-     [:th "Type"]]]
-   [:tbody
-    (for [item @user-schema]
-      [:tr
-       [:td {:key (str "action-" item)} (key item)]
-       [:td {:key (str "name-" item)} [field-name-input (key item)]]
-       [:td {:key (str "type-" item)} [type-selection (key item)]]])]])
-
 (defn add-field-button []
   [:button
-   {:class "button"
+   {:class (->s :button :is-link :is-light)
     :on-click #(swap! user-schema assoc (inc (count @user-schema)) {})}
    "Add field!"])
 
+(defn schema-table []
+  [:div {:class :box}
+   [:table {:class (->s :table
+                        :is-fullwidth
+                        :is-bordered
+                        :has-text-centered)}
+    [:thead
+     [:tr
+      [:th "Level"]
+      [:th "Name"]
+      [:th "Category"]
+      [:th "Type"]]]
+    [:tbody
+     (for [item @user-schema]
+       [:tr
+        [:td {:key (str "action-" item)} (key item)]
+        [:td {:key (str "name-" item)} [field-name-input (key item)]]
+        [:td {:key (str "category-" item)} [type-selection (key item)]]
+        [:td {:key (str "type-" item)} [type-selection (key item)]]])]]
+   [add-field-button]])
+
 (defn generate-button []
   [:button
-   {:class (if generation-ready?
-             "button is-primary"
-             "button is-static")
+   {:class (->s :button :is-warning :is-light
+                (if generation-ready?
+                  :is-primary
+                  :is-static))
     :on-click #(do
                  (reset! malli-schema nil)
                  (reset! malli-schema
@@ -149,59 +147,84 @@
                                      :size (js/parseInt @output-size)})))}
    "Generate!"])
 
-(defn field-input []
-  [:div
-   [:div {:class "field"}
-    [:div {:class "control"}]
-    [schema-table]
-    [add-field-button]
-    [output-size-input]
-    [generate-button]]])
+(defn output-size-input []
+  [:div {:class :box}
+   [:div {:class :field}
+    [:label {:class :label}
+     "Output size: "]
+    [:input {:class :input
+             :type :text
+             :placeholder @output-size
+             :on-change #(let [v (-> % .-target .-value)]
+                           (reset! output-size v))}]]
+   [generate-button]])
 
-(defn json-input []
+(defn field-input-content []
+  [:div
+   [:div {:class "container"}
+    [:h2 {:class (-> :is-size-4)}
+     "INPUT"]
+    [schema-table]
+    [output-size-input]]])
+
+(defn json-input-content []
   [:textarea {:class "textarea"
               :placeholder "e.g. Hello world"}])
 
-(defn result-window []
-  [:div {:class "column"}
-   [:h1 "Result"]
-   [:textarea {:class "textarea"
-               :rows 25
-               :read-only true
-               :value (str               
-                       (-> (into [] @malli-schema)
-                           (clj->js)
-                           (js/JSON.stringify nil 4)))}]])
+(defn output-column []
+  [:div {:class (->s :column :is-half)}
+   [:h2 {:class (-> :is-size-4)}
+    "OUTPUT"]
+   [:div {:class :box}
+    [:textarea {:class "textarea"
+                :rows 25
+                :read-only true
+                :value (str
+                        (-> (into [] @malli-schema)
+                            (clj->js)
+                            (js/JSON.stringify nil 4)))}]]])
+
+(defn input-column []
+  [:div {:class (->s :column :is-half)}
+   (case @input-mode
+     :field [field-input-content]
+     :json [json-input-content])])
 
 (defn app-page []
   [:div {:class "section"}
    [:div {:class "container"}
     [:div {:class "columns"}
-     [:div {:class "column"}
-      (case @input-mode
-        :field [field-input]
-        :json [json-input])]
-     [result-window]]]])
+     [input-column]
+     [output-column]]]])
 
 (defn about-page []
   [:div
    [:p "Object generator."]])
 
-(defonce match (rc/atom nil))
+(defonce match
+  (rc/atom nil))
 
 (defn navbar []
-  [:nav.navbar
-   {:aria-label "main navigation", :role "navigation"}
-   [:div#navbarBasicExample.navbar-menu
-    [:div.navbar-start
-     [:a.navbar-item {:href (rfe/href ::app)} "App"]
-     [:a.navbar-item {:href (rfe/href ::about)} "About"]]]])
+  [:nav {:class "navbar is-info"
+         :role "navigation"
+         :aria-label "main navigation"}
+   [:div {:id "navbarBasicExample", :class "navbar-menu"}
+    [:div {:class "navbar-start"}
+     [:a {:class "navbar-item"}
+      "Easy Object Generator"]
+     [:a {:class "navbar-item"
+          :href (rfe/href ::app)}
+      "App"]
+     [:a {:class "navbar-item"
+          :href (rfe/href ::about)}
+      "About"]]]])
 
 (defn current-page []
   [:div
    [navbar]
    (when @match
      (let [view (:view (:data @match))]
+       (print @match)
        [view @match]))])
 
 (def routes
