@@ -13,6 +13,23 @@
 
 ;; (def log (.-log js/console))
 
+(def first-names
+  ["Liam" "Noah" "Oliver" "Elijah" "James" "William"
+   "Benjamin" "Lucas" "Henry" "Theodore" "Jack" "Levi"
+   "Alexander" "Jackson" "Mateo" "Daniel" "Michael" "Mason"
+   "Sebastian" "Ethan" "Logan" "Owen" "Samuel" "Jacob"
+   "Asher" "Aiden" "John" "Joseph" "Wyatt" "David"])
+
+(def last-names
+  ["Smith" "Johnson" "Williams" "Brown" "Jones" "Garcia"
+   "Miller" "Davis" "Rodriguez" "Martinez" "Hernandez"
+   "Lopez" "Gonzales"])
+
+(def full-names
+  (for [first-name first-names
+        last-name last-names]
+    (str first-name " " last-name)))
+
 (def input-mode
   (rc/atom :field))
 
@@ -22,19 +39,34 @@
 
 (def output-size (rc/atom 1))
 
+(defn generate-person-name [kind]
+  (into [] (concat [:enum]
+                   (case kind
+                     :first first-names
+                     :last last-names
+                     :full full-names))))
+
+(def agenda
+  {:person {:first-name (generate-person-name :first)
+            :last-name (generate-person-name :last)
+            :full-name (generate-person-name :full)
+            :age [:and int? [:> 1] [:< 110]]}
+   :math {:number 'number?
+          :positive-number 'pos?
+          :negative-number 'neg?
+          :positive-integer 'pos-int?
+          :negative-integer 'neg-int?
+          :non-negative-integer 'nat-int?
+          :double 'double?
+          :boolean 'boolean?}})
+
+#_
 (def keyword->predicate
   {:string 'string?
    :int 'int?
    :float 'float?
    :any 'any?
-   :number 'number?
-   :positive-number 'pos?
-   :negative-number 'neg?
-   :positive-integer 'pos-int?
-   :negative-integer 'neg-int?
-   :non-negative-integer 'nat-int?
-   :double 'double?
-   :boolean 'boolean?
+
    :uuid 'uuid?
    :uri 'uri?
    :datetime 'inst?
@@ -52,10 +84,13 @@
     (str/join " " names)))
 
 (defn extract-fields [entry]
-  [(keyword (:name entry))
-   (keyword->predicate (:type entry))])
+  (let [{:keys [name category type]} entry
+        kname (keyword name)
+        spec (-> agenda category type)]
+    (js/alert spec)
+    [kname spec]))
 
-(defn schema-user->malli [entries]
+(defn user-schema->malli [entries]
   (apply conj [:map]
          (map extract-fields
               (vals entries))))
@@ -70,19 +105,24 @@
         p (every? true? (map check-item @user-schema))]
     (reset! generation-ready? p)))
 
-(defn type-selection [id]
+(defn category-selection [id]
   (let [dropped? (rc/atom false)
         showing (rc/atom "select")
         selected (rc/atom nil)
-        action (fn [t]
+        act (fn [t]
                  (fn []
                    (check-schema-ready)
                    (reset! selected t)
                    (swap! dropped? not)
                    (reset! showing (name t))
-                   (swap! user-schema (fn [us] (assoc-in us [id :type] t)))))]
+                   (swap! user-schema
+                          (fn [us] (assoc-in
+                                    us
+                                    [id :category]
+                                    t)))))]
     (fn []
-      [:div {:class (if @dropped? "dropdown is-active" nil)}
+      [:div {:class (when @dropped?
+                      (->s :dropdown :is-active))}
        [:div {:class "dropdown-trigger"}
         [:button {:class "button"
                   :on-click #(swap! dropped? not)
@@ -92,10 +132,47 @@
               :id "dropdown-menu"
               :role "menu"}
         (conj [:div {:class "dropdown-content"}]
-              (for [k (keys keyword->predicate)]
+              (for [k (keys agenda)]
                 [:a {:class "dropdown-item"
                      :key k
-                     :on-click (action k)} (name k)]))]])))
+                     :on-click (act k)} (name k)]))]])))
+
+(defn type-selection [id]
+  (let [dropped? (rc/atom false)
+        showing (rc/atom "select")
+        selected (rc/atom nil)
+        act (fn [t]
+              (fn []
+                (check-schema-ready)
+                (reset! selected t)
+                (swap! dropped? not)
+                (reset! showing (name t))
+                (swap! user-schema
+                       (fn [us] (assoc-in
+                                 us
+                                 [id :type]
+                                 t)))))]
+    (fn []
+
+      [:div {:class (when @dropped?
+                      (->s :dropdown :is-active))}
+       [:div {:class "dropdown-trigger"}
+        [:button {:class "button"
+                  :on-click #(swap! dropped? not)
+                  :aria-controls "dropdown-menu"}
+         [:span @showing]]]
+       [:div {:class "dropdown-menu"
+              :id "dropdown-menu"
+              :role "menu"}
+        (conj [:div {:class "dropdown-content"}]
+              (for [k (->> id
+                           (get @user-schema)
+                           :category
+                           agenda
+                           keys)]
+                [:a {:class "dropdown-item"
+                     :key k
+                     :on-click (act k)} (name k)]))]])))
 
 (defn field-name-input [id]
   [:input {:class "input"
@@ -129,7 +206,7 @@
        [:tr
         [:td {:key (str "action-" item)} (key item)]
         [:td {:key (str "name-" item)} [field-name-input (key item)]]
-        [:td {:key (str "category-" item)} [type-selection (key item)]]
+        [:td {:key (str "category-" item)} [category-selection (key item)]]
         [:td {:key (str "type-" item)} [type-selection (key item)]]])]]
    [add-field-button]])
 
@@ -142,7 +219,7 @@
     :on-click #(do
                  (reset! malli-schema nil)
                  (reset! malli-schema
-                         (mg/sample (schema-user->malli @user-schema)
+                         (mg/sample (user-schema->malli @user-schema)
                                     {:seed 42
                                      :size (js/parseInt @output-size)})))}
    "Generate!"])
@@ -222,6 +299,8 @@
 (defn current-page []
   [:div
    [navbar]
+   #_@user-schema ;; temp
+   #_@malli-schema ;; temp
    (when @match
      (let [view (:view (:data @match))]
        (print @match)
