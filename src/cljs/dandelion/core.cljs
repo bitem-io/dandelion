@@ -30,6 +30,86 @@
         last-name last-names]
     (str first-name " " last-name)))
 
+(def us-states
+  [{:full "Alabama" :standard "Ala." :code "AL"}
+   {:full "Alaska" :standard "Alaska" :code "AK"}
+   {:full "Arizona" :standard "Ariz." :code "AZ"}
+   {:full "Arkansas" :standard "Ark." :code "AR"}
+   {:full "California" :standard "Calif." :code "CA"}
+   {:full "Canal Zone" :standard "C.Z." :code "CZ"}
+   {:full "Colorado" :standard "Colo." :code "CO"}
+   {:full "Connecticut" :standard "Conn." :code "CT"}
+   {:full "Delaware" :standard "Del." :code "DE"}
+   {:full "District of Columbia" :standard "D.C." :code "DC"}
+   {:full "Florida" :standard "Fla." :code "FL"}
+   {:full "Georgia" :standard "Ga." :code "GA"}
+   {:full "Guam" :standard "Guam" :code "GU"}
+   {:full "Hawaii" :standard "Hawaii" :code "HI"}
+   {:full "Idaho" :standard "Idaho" :code "ID"}
+   {:full "Illinois" :standard "Ill." :code "IL"}
+   {:full "Indiana" :standard "Ind." :code "IN"}
+   {:full "Iowa" :standard "Iowa" :code "IA"}
+   {:full "Kansas" :standard "Kan." :code "KS"}
+   {:full "Kentucky" :standard "Ky." :code "KY"}
+   {:full "Louisiana" :standard "La." :code "LA"}
+   {:full "Maine" :standard "Maine" :code "ME"}
+   {:full "Maryland" :standard "Md." :code "MD"}
+   {:full "Massachusetts" :standard "Mass." :code "MA"}
+   {:full "Michigan" :standard "Mich." :code "MI"}
+   {:full "Minnesota" :standard "Minn." :code "MN"}
+   {:full "Mississippi" :standard "Miss." :code "MS"}
+   {:full "Missouri" :standard "Mo." :code "MO"}
+   {:full "Montana" :standard "Mont." :code "MT"}
+   {:full "Nebraska" :standard "Neb." :code "NE"}
+   {:full "Nevada" :standard "Nev." :code "NV"}
+   {:full "New Hampshire" :standard "N.H." :code "NH"}
+   {:full "New Jersey" :standard "N.J." :code "NJ"}
+   {:full "New Mexico" :standard "N.M." :code "NM"}
+   {:full "New York" :standard "N.Y." :code "NY"}
+   {:full "North Carolina" :standard "N.C." :code "NC"}
+   {:full "North Dakota" :standard "N.D." :code "ND"}
+   {:full "Ohio" :standard "Ohio" :code "OH"}
+   {:full "Oklahoma" :standard "Okla." :code "OK"}
+   {:full "Oregon" :standard "Ore." :code "OR"}
+   {:full "Pennsylvania" :standard "Pa." :code "PA"}
+   {:full "Puerto Rico" :standard "P.R." :code "PR"}
+   {:full "Rhode Island" :standard "R.I." :code "RI"}
+   {:full "South Carolina" :standard "S.C." :code "SC"}
+   {:full "South Dakota" :standard "S.D." :code "SD"}
+   {:full "Tennessee" :standard "Tenn." :code "TN"}
+   {:full "Texas" :standard "Texas" :code "TX"}
+   {:full "Utah" :standard "Utah" :code "UT"}
+   {:full "Vermont" :standard "Vt." :code "VT"}
+   {:full "Virgin Islands" :standard "V.I." :code "VI"}
+   {:full "Virginia" :standard "Va." :code "VA"}
+   {:full "Washington" :standard "Wash." :code "WA"}
+   {:full "West Virginia" :standard "W.Va." :code "WV"}
+   {:full "Wisconsin" :standard "Wis." :code "WI"}
+   {:full "Wyoming" :standard "Wyo." :code "WY"}])
+
+(defn gen-person-name [kind]
+  (into [] (concat [:enum]
+                   (case kind
+                     :first first-names
+                     :last last-names
+                     :full full-names))))
+
+(defn gen-state [kind]
+  (into [] (concat [:enum]
+                   (map kind us-states))))
+
+(def zip-codes
+  (let [create (fn [] (->> (for [_ (range 5)]
+                             (rand-int 10))
+                           (into [])
+                           (map #(-> % str))
+                           (str/join)))]
+    (into [] (for [_ (range 50)]
+               (create)))))
+
+(defn gen-zip-code []
+  (into [] (concat [:enum] zip-codes)))
+
 (def input-mode
   (rc/atom :field))
 
@@ -39,18 +119,15 @@
 
 (def output-size (rc/atom 1))
 
-(defn generate-person-name [kind]
-  (into [] (concat [:enum]
-                   (case kind
-                     :first first-names
-                     :last last-names
-                     :full full-names))))
-
 (def agenda
-  {:person {:first-name (generate-person-name :first)
-            :last-name (generate-person-name :last)
-            :full-name (generate-person-name :full)
+  {:person {:first-name (gen-person-name :first)
+            :last-name (gen-person-name :last)
+            :full-name (gen-person-name :full)
             :age [:and int? [:> 1] [:< 110]]}
+   :address {:state-full (gen-state :full)
+             :state-standard (gen-state :standard)
+             :state-code (gen-state :code)
+             :zip-code (gen-zip-code)}
    :math {:number 'number?
           :positive-number 'pos?
           :negative-number 'neg?
