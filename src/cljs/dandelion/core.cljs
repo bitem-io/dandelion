@@ -30,6 +30,17 @@
         last-name last-names]
     (str first-name " " last-name)))
 
+(def emails
+  (for [first-name first-names
+        last-name last-names]
+    (str (str/lower-case first-name) "."
+         (str/lower-case last-name) "@jsongenerator.com")))
+
+(def relationships
+  [:spouse :husband :wife :grandfather :grandmother
+   :cousin :neice :aunt :uncle :son :daughter :relative
+   :boss :employee :employer :colleague])
+
 (def us-states
   [{:full "Alabama" :standard "Ala." :code "AL"}
    {:full "Alaska" :standard "Alaska" :code "AK"}
@@ -94,16 +105,23 @@
                      :last last-names
                      :full full-names))))
 
+(defn gen-email []
+  (into [] (concat [:enum] emails)))
+
+(defn gen-relationship []
+  (into [] (concat [:enum] relationships)))
+
 (defn gen-state [kind]
   (into [] (concat [:enum]
                    (map kind us-states))))
 
 (def zip-codes
-  (let [create (fn [] (->> (for [_ (range 5)]
-                             (rand-int 10))
-                           (into [])
-                           (map #(-> % str))
-                           (str/join)))]
+  (let [create (fn []
+                 (->> (for [_ (range 5)]
+                        (rand-int 10))
+                      (into [])
+                      (map #(-> % str))
+                      (str/join)))]
     (into [] (for [_ (range 50)]
                (create)))))
 
@@ -123,17 +141,16 @@
   {:person {:first-name (gen-person-name :first)
             :last-name (gen-person-name :last)
             :full-name (gen-person-name :full)
+            :email (gen-email)
+            :relaltionship (gen-relationship)
             :age [:and int? [:> 1] [:< 110]]}
    :address {:state-full (gen-state :full)
              :state-standard (gen-state :standard)
              :state-code (gen-state :code)
              :zip-code (gen-zip-code)}
    :math {:number 'number?
-          :positive-number 'pos?
-          :negative-number 'neg?
-          :positive-integer 'pos-int?
-          :negative-integer 'neg-int?
-          :non-negative-integer 'nat-int?
+          :positive-integer [:and pos-int? [:> 1] [:< 10000]]
+          :negative-integer [:and neg-int? [:< -1] [:> -10000]]
           :double 'double?
           :boolean 'boolean?}})
 
